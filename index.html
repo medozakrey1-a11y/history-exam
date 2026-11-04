@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>امتحان تاريخ وطني - منصة التصحيح التفاعلية</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Cairo -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Firebase Standard Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                        }
+                    },
+                    fontFamily: {
+                        cairo: ['Cairo', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            user-select: none;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #0284c7;
+            border-radius: 4px;
+        }
+        .slide-enter {
+            animation: slideIn 0.35s ease-out forwards;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        .hourglass-spin {
+            animation: spinHourglass 3s infinite ease-in-out;
+        }
+        @keyframes spinHourglass {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(180deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-100 min-h-screen flex flex-col justify-between transition-colors duration-300">
+
+    <!-- Header Navigation -->
+    <header class="sticky top-0 z-40 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <!-- App Title & Icon -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-500 text-white flex items-center justify-center font-bold text-xl shadow-lg shadow-brand-500/30">
+                    🇪🇬
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-extrabold text-gray-900 dark:text-white leading-tight">امتحان تاريخ وطني</h1>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">منصة الاختبار التفاعلي والتصحيح الإلكتروني 🎓</p>
+                </div>
+            </div>
+
+            <!-- Timer & Controls -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Mode Switcher (Student / Teacher) -->
+                <button id="switchRoleBtn" class="bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/80 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-purple-200 dark:border-purple-800">
+                    <i class="fa-solid fa-user-shield"></i>
+                    <span id="roleLabel">لوحة المعلم 👨‍🏫</span>
+                </button>
+
+                <!-- Live Timer Badge (Student Mode) -->
+                <div id="timerContainer" class="hidden flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold shadow-inner">
+                    <i class="fa-regular fa-clock text-amber-500 animate-pulse"></i>
+                    <span id="timer">250:00</span>
+                </div>
+
+                <!-- Theme Toggle Button -->
+                <button id="themeToggle" class="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition flex items-center justify-center text-base" title="تبديل النمط">
+                    <i id="themeIcon" class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Progress Bar (Hidden initially) -->
+        <div id="progressBarContainer" class="w-full bg-gray-200 dark:bg-gray-700 h-1.5 hidden">
+            <div id="progressBar" class="bg-brand-500 h-1.5 transition-all duration-300 w-0"></div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-4xl mx-auto px-4 py-6 w-full flex-grow">
+
+        <!-- STUDENT VIEW 1: Start & Name Input -->
+        <div id="startScreen" class="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-10 shadow-xl border border-gray-100 dark:border-gray-700 text-center slide-enter">
+            <div class="w-20 h-20 bg-brand-50 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl shadow-inner">
+                ✍️
+            </div>
+            <h2 class="text-2xl sm:text-3xl font-extrabold mb-3 text-gray-900 dark:text-white">أهلاً بك في امتحان تاريخ وطني</h2>
+            <p class="text-gray-600 dark:text-gray-300 text-sm sm:text-base max-w-xl mx-auto mb-8 leading-relaxed">
+                يتكون الامتحان من <strong class="text-brand-500">43 سؤالاً</strong> (أسئلة اختيارية ومقالية). 
+                الزمن الكلي <strong class="text-amber-600 dark:text-amber-400">250 دقيقة</strong>. عند الانتهاء من حل الأسئلة، سيعرض النظام حالة إجاباتك ويتم إرسال المقالي مباشرة للمعلم للبدء في تصحيحها.
+            </p>
+
+            <div class="max-w-md mx-auto text-right mb-8">
+                <label for="studentName" class="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">
+                    اسم الطالب الثلاثي / الرباعي <span class="text-red-500">*</span>
+                </label>
+                <div class="relative">
+                    <input type="text" id="studentName" placeholder="أدخل اسمك كاملاً..." class="w-full px-4 py-3.5 pr-11 rounded-2xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition text-base" />
+                    <i class="fa-solid fa-user text-gray-400 absolute right-4 top-1/2 -translate-y-1/2"></i>
+                </div>
+                <p id="nameError" class="text-red-500 text-xs mt-2 hidden">⚠️ يرجى كتابة اسم الطالب أولاً لبدء الامتحان.</p>
+            </div>
+
+            <button id="startBtn" class="bg-brand-500 hover:bg-brand-600 text-white font-bold px-10 py-4 rounded-2xl shadow-lg shadow-brand-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0 text-lg flex items-center justify-center gap-3 mx-auto">
+                <span>ابدأ امتحان تاريخ وطني</span>
+                <span class="text-xl">🚀</span>
+            </button>
+        </div>
+
+        <!-- STUDENT VIEW 2: Questions Screen -->
+        <div id="examScreen" class="hidden slide-enter">
+            
+            <!-- Question Navigation Grid -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-grip"></i> خريطة الأسئلة (43 سؤالاً)
+                    </span>
+                    <span id="questionCounter" class="text-xs font-bold bg-brand-50 dark:bg-gray-700 text-brand-600 dark:text-brand-400 px-2.5 py-1 rounded-lg">
+                        السؤال 1 من 43
+                    </span>
+                </div>
+                <div id="questionNavGrid" class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
+                    <!-- Dynamic Grid Buttons -->
+                </div>
+            </div>
+
+            <!-- Question Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 shadow-xl border border-gray-100 dark:border-gray-700 relative overflow-hidden min-h-[420px] flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <span id="questionTypeBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                            <!-- Type Badge -->
+                        </span>
+                        <span id="questionPointsBadge" class="text-xs font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-lg">
+                            <!-- Points -->
+                        </span>
+                    </div>
+
+                    <h3 id="questionText" class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white leading-relaxed mb-6">
+                        <!-- Question Text -->
+                    </h3>
+
+                    <div id="optionsContainer" class="space-y-3 mb-6">
+                        <!-- Dynamic Options / Textarea -->
+                    </div>
+                </div>
+
+                <!-- Footer Nav Controls -->
+                <div class="pt-6 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-4">
+                    <button id="prevBtn" class="px-5 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold transition flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <span>⬅️</span>
+                        <span>السابق</span>
+                    </button>
+
+                    <div id="emojiTransition" class="text-2xl animate-bounce hidden sm:block">
+                        ✨
+                    </div>
+
+                    <button id="nextBtn" class="px-6 py-3 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-bold transition shadow-md flex items-center gap-2">
+                        <span>التالي</span>
+                        <span>🚀</span>
+                    </button>
+                    
+                    <button id="submitExamBtn" class="hidden px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition shadow-lg shadow-emerald-600/30 items-center gap-2">
+                        <span>إرسال الامتحان للتصحيح</span>
+                        <span>⏳</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- STUDENT VIEW 3: Pending Correction & Final Score Screen -->
+        <div id="studentStatusScreen" class="hidden slide-enter space-y-6">
+            
+            <!-- Pending State Card -->
+            <div id="pendingCard" class="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-10 shadow-xl border border-amber-200 dark:border-amber-800 text-center">
+                <div class="w-24 h-24 bg-amber-50 dark:bg-amber-950/60 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-5 text-5xl shadow-inner">
+                    <span class="hourglass-spin">⏳</span>
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 mb-2">يتم تصحيح المقالي الخاص بك ⏳</h2>
+                <p class="text-gray-600 dark:text-gray-300 text-sm sm:text-base max-w-lg mx-auto mb-6">
+                    تم استلام إجابات الطالب <span id="pendingStudentName" class="font-bold text-gray-900 dark:text-white"></span> بنجاح. يتم الآن مراجعة إجاباتك المقالية من قبل المعلم. ستظهر درجتك تلقائياً في هذه الشاشة فور رصدها!
+                </p>
+
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-xs font-bold">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    <span>بانتظار اعتماده من المعلم... لا تغلق الصفحة أو قم بإعادة تنشيطها لاحقاً</span>
+                </div>
+            </div>
+
+            <!-- Graded State Card (Visible after teacher grades) -->
+            <div id="gradedCard" class="hidden bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-10 shadow-xl border border-emerald-200 dark:border-emerald-800 text-center">
+                <div class="w-24 h-24 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-5 text-5xl shadow-inner">
+                    ✅
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mb-1">تم إعلان نتيجة الاختبار!</h2>
+                <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">نتيجة اختبار تاريخ وطني للطالب: <strong id="gradedStudentName" class="text-gray-900 dark:text-white"></strong></p>
+
+                <div class="bg-gradient-to-br from-emerald-500 to-teal-700 text-white p-6 rounded-2xl max-w-sm mx-auto shadow-xl mb-6">
+                    <span class="block text-xs uppercase tracking-wider font-bold opacity-80 mb-1">إجمالي الدرجة</span>
+                    <div class="text-4xl sm:text-5xl font-extrabold" id="finalScoreDisplay">0 / 0</div>
+                    <span class="block text-sm font-bold mt-2 bg-white/20 px-3 py-1 rounded-full inline-block" id="percentageDisplay">0%</span>
+                </div>
+
+                <p id="teacherGlobalFeedback" class="text-xs sm:text-sm text-gray-600 dark:text-gray-300 italic mb-4 max-w-md mx-auto">
+                    <!-- General teacher note -->
+                </p>
+            </div>
+
+            <!-- Student Answers Review -->
+            <div class="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 shadow-xl border border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center justify-between">
+                    <span><i class="fa-solid fa-receipt text-brand-500 ml-2"></i>ملخص وإجاباتك المسجلة:</span>
+                    <span id="statusTag" class="text-xs px-3 py-1 rounded-full font-bold bg-amber-100 text-amber-700">قيد التصحيح ⏳</span>
+                </h3>
+                <div id="studentReviewList" class="space-y-4 max-h-[450px] overflow-y-auto pr-2">
+                    <!-- Dynamic Answer List -->
+                </div>
+            </div>
+        </div>
+
+        <!-- TEACHER DASHBOARD VIEW -->
+        <div id="teacherScreen" class="hidden slide-enter space-y-6">
+            
+            <!-- Top Dashboard Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-xl border border-purple-100 dark:border-purple-900">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-700 pb-4 mb-4">
+                    <div>
+                        <h2 class="text-xl font-black text-purple-900 dark:text-purple-300 flex items-center gap-2">
+                            👨‍🏫 لوحة المعلم للتصحيح الإلكتروني
+                        </h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">مراجعة إجابات امتحان تاريخ وطني ورصد درجات الأسئلة المقالية</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-gray-500 dark:text-gray-400">إجمالي الطلاب:</span>
+                        <span id="studentsTotalBadge" class="bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 font-bold px-3 py-1 rounded-xl text-xs">0</span>
+                    </div>
+                </div>
+
+                <!-- Select Student Dropdown -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">اختر طالباً لمراجعة وتصحيح امتحانه:</label>
+                    <select id="studentsSelect" class="w-full p-3 rounded-2xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <option value="">-- اختر من قائمة الطلاب المنتظرين أو المصححين --</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Correction Interface for Selected Student -->
+            <div id="correctionArea" class="hidden space-y-6">
+                
+                <div class="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div>
+                        <h3 id="currentCorrectingStudent" class="text-lg font-bold text-gray-900 dark:text-white">طالب: --</h3>
+                        <p id="currentCorrectingTime" class="text-xs text-gray-500 dark:text-gray-400">زمن التقديم: --</p>
+                    </div>
+                    
+                    <div class="flex items-center gap-3">
+                        <div class="text-right">
+                            <span class="block text-xs text-gray-500 dark:text-gray-400 font-bold">الدرجة المحسوبة</span>
+                            <span id="liveCalculatedScore" class="text-xl font-extrabold text-brand-600 dark:text-brand-400">0 / 100</span>
+                        </div>
+                        <button id="saveGradingBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-2xl shadow-lg shadow-emerald-600/30 transition flex items-center gap-2 text-sm">
+                            <i class="fa-solid fa-paper-plane"></i>
+                            <span>اعتماد النتيجة وإرسالها للطالب</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Questions List to Grade -->
+                <div id="gradingQuestionsContainer" class="space-y-4">
+                    <!-- Dynamic Questions Grading Items -->
+                </div>
+            </div>
+
+            <div id="noStudentSelectedMsg" class="bg-white dark:bg-gray-800 rounded-3xl p-12 text-center text-gray-400 dark:text-gray-500 shadow-sm border border-gray-100 dark:border-gray-700">
+                <i class="fa-solid fa-clipboard-user text-5xl mb-3"></i>
+                <p class="font-bold text-sm">يرجى اختيار طالب من القائمة أعلاه لبدء عملية التصحيح والرصد</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-4 text-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-800">
+        منصة "امتحان تاريخ وطني" للتصحيح الإلكتروني والمزامنة السحابية © 2026
+    </footer>
+
+    <!-- Firebase App Logic -->
+    <script>
+        // Firebase Setup & Initialization
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "demo-api-key",
+            authDomain: "demo-project.firebaseapp.com",
+            projectId: "demo-project",
+            storageBucket: "demo-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:demo"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'national-history-exam';
+
+        // Anonymous Auth Login
+        auth.signInAnonymously().catch(err => console.log("Auth err:", err));
+
+        // Questions Database (Complete 43 Questions with Correct Answers mapped)
+        const questionsData = [
+            { id: 2, type: "mcq", points: 1, question: "قامت الثورة العرابية عام ١٨٨١ بقيادة الزعيم أحمد عرابي متخذة شعار \"مصر للمصريين\" مؤكدا على", options: ["ولادة مفهوم السيادة", "المطالبة بإقامة وزارة دخلية", "المطالبة بإسقاط الوزارة المختلطة", "الرغبة في القضاء على التمييز الطبقي وبين افراد الجيش"], modelAnswer: "ولادة مفهوم السيادة" },
+            { id: 3, type: "mcq", points: 1, question: "اتبعت بريطانيا سياسة الإحتلال الغير مباشر وظهر ذلك من خلال", options: ["ابقاء السلطة الفعلية في يد الخديو توفيق والمعتمد البريطاني", "ادخال المستشارين البريطانيين في الوزارات المصرية", "تفريغ مؤسسات الدولة من الموظفين", "الحفاظ على مصالحها الاستراتيجية"], modelAnswer: "ادخال المستشارين البريطانيين في الوزارات المصرية" },
+            { id: 4, type: "mcq", points: 2, question: "كانت سياسة محمد علي الإقتصادية تهدف في المقام الأول إلى", options: ["حماية المنتج المحلي أمام الأجنبي", "العمل على حماية مصر من تقلبات السوق الخارجية", "الحرص على إقامة مصانع داخلية", "الحرص على التفتح على الأسواق الخارجية بحيث يصدر المنتجات المصرية للخارج ويقل الاستيراد"], modelAnswer: "الحرص على التفتح على الأسواق الخارجية بحيث يصدر المنتجات المصرية للخارج ويقل الاستيراد" },
+            { id: 5, type: "mcq", points: 2, question: "اي الجمل التالية توضح نية نابليون الحقيقية في مصر", options: ["وإن كانت مصر لهم فليأتوا بالحجة الإلهية", "يا أيها العلماء اخبروا المصريين اني جئت مصلحا", "اني احترم الله ورسوله", "كانت مصر سيدة الشرق ولها ان تعود لمنصبها ويعود المصريين لتولي المناصب العليا"], modelAnswer: "وإن كانت مصر لهم فليأتوا بالحجة الإلهية" },
+            { id: 6, type: "mcq", points: 2, question: "رمية بلا رام تنطبق المقولة على", options: ["كتاب وصف مصر", "حجر رشيد", "المجمع العلمي", "الدواوين المحلية"], modelAnswer: "حجر رشيد" },
+            { id: 7, type: "mcq", points: 2, question: "كان المجمع العلمي بمثابة نافذة تطل بها الحضارة المصرية على الحضارة الأوروبية مما يدل على", options: ["العزلة التي فرضتها الدولة العثمانية على المصريين", "اطلاع المصريين على الديمقراطية الأوروبية", "مشاركة المصريين في المجمع العلمي", "الأولى والثالثة صحيحتان"], modelAnswer: "العزلة التي فرضتها الدولة العثمانية على المصريين" },
+            { id: 8, type: "mcq", points: 2, question: "اللعب المصرية القديمة-اللغة القبطية-اللغة العربية يدل تعدد لغات الشعب المصري على", options: ["الانصهار الثقافي والحضاري", "قدرة المصريين على التكيف", "اللغة صارت وعاء للثقافة", "تغير جذري في الجوانب الإثنوغرافية بتغير العصور"], modelAnswer: "الانصهار الثقافي والحضاري" },
+            { id: 9, type: "mcq", points: 2, question: "تتشابه كل من طيبة والفسطاط في", options: ["السيطرة على الملاحة النهرية", "السيادة المملوكة", "حدود السلطة والقوة", "الهدف من تأسيسها"], modelAnswer: "الهدف من تأسيسها" },
+            { id: 10, type: "mcq", points: 2, question: "إرسال الرئيس المصري للقوات المصرية إلى السعودية في التاريخ المعاصر لمساندتها في الحرب السعودية الحوثية بعد الحصول على موافقة البرلمان يدل على أن الدستور المصري يعمل على", options: ["تقييد السلطة التنفيذية", "فَرَضَ على مصر ضرورة الدفاع عن الدول العربية", "تحديد دوائر انتماء الشعب المصري", "تطبيق مبدأ سيادة السلطة المركزية"], modelAnswer: "تقييد السلطة التنفيذية" },
+            { id: 11, type: "mcq", points: 2, question: "الإحتلال هو سيطرة دولة قوية على دولة ضعيفة دون موافقة شعبها لذا من مفهوم الإحتلال نجد ان المادة الأولى من الدستور المصري التي تنص على ان مصر دولة حرة ذات سيادة لا ينزل عن جزء منها.هذا المادة ضد", options: ["مفهوم الإحتلال", "مفهوم السلطة المركزية", "وزارة الدفاع", "وزارة الخارجية"], modelAnswer: "مفهوم الإحتلال" },
+            { id: 12, type: "mcq", points: 2, question: "تشابه انشاء الهكسوس لأواريس مع عمرو بن العاص في جوانب", options: ["جفرافية أمنية", "اقتصادية بحتة", "السيطرة على طرق التجارة الآسيوية", "الإهتمام بالبنية التحتية"], modelAnswer: "جفرافية أمنية" },
+            { id: 13, type: "mcq", points: 2, question: "تم تطوير التجارة في عصر صدر الإسلام(العصر الوسيط في مصر)من خلال عدة طرق منها", options: ["صناعة الاخشاب", "صناعة المعادن", "تغليب العائد على تنوع المحاصيل الزراعية (تنوع الزراعة)", "إقامة مشاريع لوچيستية"], modelAnswer: "إقامة مشاريع لوچيستية" },
+            { id: 14, type: "mcq", points: 2, question: "صارت مصر مسرحا للصراع بين القوى الدولية في نهاية العقد السابع من القرن التاسع عشر بسبب", options: ["اللوچيتسية", "البيروقراطية", "الأوتوقراطية", "سياسة الديون والقروض التي اتبعها الخديو إسماعيل"], modelAnswer: "سياسة الديون والقروض التي اتبعها الخديو إسماعيل" },
+            { id: 15, type: "mcq", points: 1, question: "اكتسبت الصحاري في العصر الروماني بمصر أهمية", options: ["دينية", "اقتصادية", "فنية", "سياسية"], modelAnswer: "دينية" },
+            { id: 16, type: "mcq", points: 1, question: "هناك جزيرة في البحر الأحمر تبتعد عن خط الساحل المصري بمسافة 7 أميال فمن المتوقع ان الدولة المصرية", options: ["تهمل الجزيرة", "تدير شئونها لدول اخرى", "قامت ببيعها", "تدير شئونها بما يتناسب مع الدولة المصرية"], modelAnswer: "تدير شئونها بما يتناسب مع الدولة المصرية" },
+            { id: 17, type: "mcq", points: 1, question: "عدم مرور طائرة في المجال الجوي المصري إلا بتصريح يدل على ممارسة مصر لـ", options: ["السيادة الإقليمية", "النفوذ الإقليمي", "السلطة التنفيذية على الأرض", "السلطة التشريعية"], modelAnswer: "السيادة الإقليمية" },
+            { id: 18, type: "mcq", points: 1, question: "الأساس الذي تقوم عليه الدول", options: ["العماد الاقتصادي", "القوة العسكرية", "النظم البيروقراطية", "نظم سياسية"], modelAnswer: "نظم سياسية" },
+            { id: 19, type: "mcq", points: 2, question: "كان لإنشاء مجمع وصف مصر هدف ظاهر وباطن. استنتج الهدف الباطن", options: ["اضفاء الشرعنة على التواجد الفرنسي", "استغلال موارد مصر", "رسم الخرائط", "دراسة الحضارة المصرية"], modelAnswer: "استغلال موارد مصر" },
+            { id: 20, type: "mcq", points: 2, question: "صدر في تصريح 28 فبراير 1922 ان بريطانيا ستدافع عن مصر ضد اي احتلال اجنبي مما يدل على حرص بريطانيا على", options: ["التدخل في الشئون الداخلية المصرية", "التعدي على السيادة المصرية", "اعاقة اقامة جيش وطني", "اضافة شرعنة على التواجد البريطاني في منطقة القناة"], modelAnswer: "اعاقة اقامة جيش وطني" },
+            { id: 21, type: "mcq", points: 2, question: "تعتبر اول تدخل فعلي في الخزانة المصرية", options: ["صندوق الدين", "المراقبة الثنائية", "بعثة كيڤ", "الوزارة المختلطة"], modelAnswer: "صندوق الدين" },
+            { id: 22, type: "mcq", points: 2, question: "كل مما يأتي من نتائج ثورة 1919 عدا", options: ["النضال الشعبي", "الوعي الوطني", "تصريح 28 فبراير", "دستور 1923"], modelAnswer: "النضال الشعبي" },
+            { id: 23, type: "mcq", points: 2, question: "يدل عدم تولي حزب الوفد الحكم إلا سبع سنوات متقطعة على", options: ["فساد حاشية الملك", "حرص بريطانيا على مصالحها الاستراتيجية", "وهن القوة العسكرية", "عزوف الشعب عن المشاركة السياسية لانعدام ثقته بالسلطة"], modelAnswer: "حرص بريطانيا على مصالحها الاستراتيجية" },
+            { id: 24, type: "mcq", points: 2, question: "ازدواجية الحكم. تظهر تابعيات هذا النظام خلال", options: ["ظلم حزب الوفد", "فض انتخابات نادي الضباط", "السيطرة على مقر الاذاعة", "حريق القاهرة"], modelAnswer: "فض انتخابات نادي الضباط" },
+            { id: 25, type: "mcq", points: 2, question: "منشور الملك فاروق للتخلي عن حكم البلاد والغاء النظام الملكي واعلاء النظام الجمهوري يدل على", options: ["نجاح ثورة ١٩٥٢ على الحسم بأقل تكلفة", "السيطرة العسكرية على القصر الملكي", "عزوف القوة الوطنية", "ارساء مبدأ الديمقراطية"], modelAnswer: "نجاح ثورة ١٩٥٢ على الحسم بأقل تكلفة" },
+            { id: 26, type: "mcq", points: 2, question: "ترتب على نجاح معاهدة الجلاء ١٩٥٤", options: ["حصول مصر على السيادة الفعلية الكاملة على أرضها", "دعم مصر لقضايا التحرر في العالم العربي", "عودة العلاقات السياسية الخارجية", "عودة العلاقات الدبلوماسية"], modelAnswer: "حصول مصر على السيادة الفعلية الكاملة على أرضها" },
+            { id: 27, type: "mcq", points: 2, question: "ولكل جواد كبوة كما للشمس حيناً غروب ينطبق ما يأتي على", options: ["كتاب وصف مصر", "ثورة ١٩١٩", "سقوط الفرس على يد الاسكندر في مصر", "حجر رشيد"], modelAnswer: "سقوط الفرس على يد الاسكندر في مصر" },
+            { id: 28, type: "mcq", points: 2, question: "توقيع معاهدة اقامة قناة السويس يمثل ركنين للدولة المصرية هما (علما ان الخديو إسماعيل كان يمثل السلطة)", options: ["السلطة والحيز الجغرافي", "السلطة والشعب", "السيادة والحيز الجغرافي", "السيادة والشعب"], modelAnswer: "السلطة والحيز الجغرافي" },
+            { id: 29, type: "mcq", points: 2, question: "إذا لم يكن إلا الأسنّةُ مركبًافما حيلةُ المضطرِّ إلا ركوبُها يُستنتج من البيت السابق:", options: ["توسعات محمد علي لحماية الحدود", "قبول محمد علي معاهدة لندن", "حماية بريطانيا مصالحها في الشرق بمعاهدة بلطة ليمان", "الاولى والثاثة صحيحة"], modelAnswer: "توسعات محمد علي لحماية الحدود" },
+            { id: 30, type: "mcq", points: 2, question: "إذا لم يكن إلا الأسنّةُ مركبًافما حيلةُ المضطرِّ إلا ركوبُها. أي المواقف التاريخية الآتية يُعبّر بصورة أدق عن الفكرة التي يشير إليها البيت الشعري؟", options: ["اتجاه إسماعيل إلى الاستعانة بالقروض الأجنبية لتحديث مصر.", "اهتمام محمد علي ببناء جيش قوي لحماية استقلال الدولة وتحقيق أهدافها.", "قبول الخديوي توفيق التدخل الأجنبي لمواجهة الثورة العرابية.", "الأولى والثالثة"], modelAnswer: "اهتمام محمد علي ببناء جيش قوي لحماية استقلال الدولة وتحقيق أهدافها." },
+            { id: 31, type: "mcq", points: 2, question: "«ومن يتهيبْ صعودَ الجبالِ يعشْ أبدَ الدهرِ بين الحُفَرْ» هذا البيت تطبيق لأفكار", options: ["محمد عبده", "جمال الدين الأفغاني", "رفاعة الطهطاوي", "مصطفى كامل"], modelAnswer: "مصطفى كامل" },
+            { id: 32, type: "essay", points: 4, question: "ما العلاقة بين أفكار جمال الدين الأفغاني وتأميم شركة قناة السويس؟", modelAnswer: "دعوة الأفغاني لمناهضة الاستعمار واستعادة السيادة الوطنية والنهضة أثمرت عملياً في تأميم قناة السويس 1956 باستعادة الملكية الكاملة." },
+            { id: 33, type: "essay", points: 4, question: "وإن اردت ان تختبر خلق مرء فأختبره وقت الخصام. طبق هذه العبارة على احدى صور الاحتلال التي تعرضت لها مصر.", modelAnswer: "تتجسد في حادثة دنشواي 1906 حيث كشفت بريطانيا عن استبدادها وقسوتها عند وقوع صدام فردي بعقد محاكمات ظالمة للمصريين." },
+            { id: 34, type: "essay", points: 4, question: "يا بلادي ذي يدي ان مدت الدنيا يدا. ارتبط هذا القول بأحد المفكرين وضح من هو وكيف ارتبط هذا الشطر بتوجهه.", modelAnswer: "مصطفى كامل، حيث كرس حياته وتوجهه للوطنية والتضحية لنيل الاستقلال ورفع الوعي القومي ومناهضة الاحتلال." },
+            { id: 35, type: "essay", points: 4, question: "فرق تسد هي سياسة اتبعها الاستعمار ولكن تجنب هذه السياسة احد المفكرين. استنتج من هو وكيف طبق مفهومه ليقضى على ذلك.", modelAnswer: "سعد زغلول، حيث وحد صفوف الأمة بين المسلمين والأقباط في ثورة 1919 تحت شعار الهلال والصليب ليقضي على الفتنة الاستعمارية." },
+            { id: 36, type: "mcq", points: 1.5, question: "كانت افكار التيار الديني ضد العثمانيين من حيث", options: ["اهمال التعليم", "جمود العقل", "رفض الاستبداد السياسي", "رفض العزلة"], modelAnswer: "رفض العزلة" },
+            { id: 37, type: "essay", points: 2, question: "تنص المادة الرابعة من الدستور المصري ان الشعب المصري هو مصدر السلطات. طبق هذه المادة على احدى الثورات المصرية مدللا على اجابتك مما درست.", modelAnswer: "ثورة 1805 الشعبية بعزل خورشيد باشا وتولية محمد علي بشرط ألا يبرم أمراً إلا بشورتهم، متخذين الشعب مصدراً للسلطات." },
+            { id: 38, type: "essay", points: 2.5, question: "ولو كان لي فوق العمر عمر فالقراءة هي عمري. هذا البيت يتفق مع توجهات (جمال الدين الافغاني - رفاعة الطهطاوي - احمد لطفي السيد) اختر اجابتك معللا عليها واستخدم أدلة تبرهن على صحتها.", modelAnswer: "رفاعة الطهطاوي، لأنه رائد التنوير ورئيس مدرسة الألسن ورعى حركة الترجمة والتعليم والتثقيف." },
+            { id: 39, type: "mcq", points: 2.5, question: "يا صاح لا تجعل للخصام في قلبك مأوى ان قلبي للحب صار معبد. يتفق هذا البيت الشعري مع احدى الأحداث التي وقعت في مصر وهي", options: ["ثورة 1919", "ثورة 1952", "مقاومة الفرس", "مقاومة البطالمة"], modelAnswer: "ثورة 1919" },
+            { id: 40, type: "mcq", points: 2.5, question: "استفاد محمد على بصورة مباشرة من البعثات العلمية في", options: ["إقامة مصانع الغسل والنسيج", "بناء الجيش", "تثبيت أركان الدولة", "التطلع للحكم"], modelAnswer: "بناء الجيش" },
+            { id: 41, type: "mcq", points: 2.5, question: "تخيل تنازل الرئيس السيسي لمحافظ بورسعيد فيعطيه حرية التصرف في ادارة الشئون المالية فهذا يضر إحدى مقومات قيام الدولة وهي", options: ["السيادة الداخلية والخارجية", "الجيش والشعب", "الهوية الوطنية والأمن القومي", "النظم الإدارية"], modelAnswer: "السيادة الداخلية والخارجية" },
+            { id: 42, type: "mcq", points: 3, question: "إذا كان التوسع في زراعة محصول واحد يزيد العائد في ظروف معينة، فإن أخطر أوجه التشابه بين هذه السياسة والتوسع في الاقتراض الخارجي يتمثل في...", options: ["أن كليهما يؤدي بالضرورة إلى الاحتلال العسكري.", "تغليب المكاسب الآنية بما قد يزيد التعرض للأزمات الخارجية.", "أن كليهما يمنع الدولة من تطوير مواردها الطبيعية.", "أن كليهما يمثل تنازلًا قانونيًا مباشرًا عن السيادة."], modelAnswer: "تغليب المكاسب الآنية بما قد يزيد التعرض للأزمات الخارجية." },
+            { id: 43, type: "essay", points: 4, question: "اذكر الفرق بين التأميم والتمصير. وهل كان رفض مصر لتوقيع اتفاقية سلام مع إسرائيل دليلا على عدم دعم قضايا التحرر العربي أم هو دليل على رفض الصلح المشروط معللا إجاباتك مصحوبة بالأدلة؟", modelAnswer: "التأميم تحويل الملكية للدولة (كالسيادة)، والتمصير إحلال الكوادر المصرية. ورفض الصلح كان رفضا للصلح المشروط وتمسكا بحقوق التحرر العربي كاملة." },
+            { id: 44, type: "essay", points: 4.5, question: "كان نابليون قارئا جيدا للتاريخ المصري لكنه اغفل جانبا هاما كان سببا في فشل الحملة. فهل كان هذا الجانب في النواحي (الإثنوغرافية أم البيروقراطية أم الديموغرافية) مبررا إجاباتك بالأدلة؟", modelAnswer: "الإثنوغرافية، حيث أغفل الهوية الاجتماعية والدينية للمصريين مما أشعل الثورات والمقاومة ضد الحملة." }
+        ];
+
+        // Total Max Points
+        const TOTAL_EXAM_POINTS = questionsData.reduce((acc, q) => acc + q.points, 0);
+
+        // State Variables
+        let currentMode = "student"; // "student" or "teacher"
+        let currentQuestionIndex = 0;
+        let studentAnswers = {};
+        let timerSeconds = 250 * 60;
+        let timerInterval = null;
+        let currentStudentId = null;
+        let currentStudentName = "";
+        let allStudentsSubmissions = {};
+        let activeTeacherSelectedDocId = null;
+
+        const funEmojis = ["🚀", "✨", "🎯", "🧠", "💡", "⚡", "⏳"];
+
+        // DOM Elements
+        const switchRoleBtn = document.getElementById('switchRoleBtn');
+        const roleLabel = document.getElementById('roleLabel');
+        const themeToggleBtn = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        
+        const startScreen = document.getElementById('startScreen');
+        const examScreen = document.getElementById('examScreen');
+        const studentStatusScreen = document.getElementById('studentStatusScreen');
+        const teacherScreen = document.getElementById('teacherScreen');
+
+        const timerContainer = document.getElementById('timerContainer');
+        const timerElement = document.getElementById('timer');
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBar = document.getElementById('progressBar');
+
+        const studentNameInput = document.getElementById('studentName');
+        const nameError = document.getElementById('nameError');
+        const startBtn = document.getElementById('startBtn');
+
+        const questionNavGrid = document.getElementById('questionNavGrid');
+        const questionCounter = document.getElementById('questionCounter');
+        const questionTypeBadge = document.getElementById('questionTypeBadge');
+        const questionPointsBadge = document.getElementById('questionPointsBadge');
+        const questionText = document.getElementById('questionText');
+        const optionsContainer = document.getElementById('optionsContainer');
+
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const submitExamBtn = document.getElementById('submitExamBtn');
+        const emojiTransition = document.getElementById('emojiTransition');
+
+        // Theme Toggle
+        themeToggleBtn.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            themeIcon.className = isDark ? "fa-solid fa-sun text-amber-400" : "fa-solid fa-moon";
+        });
+
+        // Toggle Teacher / Student View
+        switchRoleBtn.addEventListener('click', () => {
+            if (currentMode === "student") {
+                const pass = prompt("أدخل كلمة مرور المعلم للدخول للوحة التصحيح:", "123456");
+                if (pass === "123456") {
+                    currentMode = "teacher";
+                    roleLabel.innerText = "صفحة الطالب 🎓";
+                    showTeacherView();
+                } else if (pass !== null) {
+                    alert("كلمة المرور غير صحيحة!");
+                }
+            } else {
+                currentMode = "student";
+                roleLabel.innerText = "لوحة المعلم 👨‍🏫";
+                showStudentView();
+            }
+        });
+
+        function showStudentView() {
+            teacherScreen.classList.add('hidden');
+            if (currentStudentId) {
+                studentStatusScreen.classList.remove('hidden');
+            } else {
+                startScreen.classList.remove('hidden');
+            }
+        }
+
+        function showTeacherView() {
+            startScreen.classList.add('hidden');
+            examScreen.classList.add('hidden');
+            studentStatusScreen.classList.add('hidden');
+            timerContainer.classList.add('hidden');
+            progressBarContainer.classList.add('hidden');
+            teacherScreen.classList.remove('hidden');
+            listenToSubmissions();
+        }
+
+        // Start Student Exam Logic
+        startBtn.addEventListener('click', () => {
+            const nameValue = studentNameInput.value.trim();
+            if (!nameValue) {
+                nameError.classList.remove('hidden');
+                studentNameInput.focus();
+                return;
+            }
+            nameError.classList.add('hidden');
+            currentStudentName = nameValue;
+            currentStudentId = 'std_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+            startScreen.classList.add('hidden');
+            examScreen.classList.remove('hidden');
+            timerContainer.classList.remove('hidden');
+            progressBarContainer.classList.remove('hidden');
+
+            startTimer();
+            renderNavGrid();
+            loadQuestion(0);
+        });
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                if (timerSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    submitExamToCloud();
+                    return;
+                }
+                timerSeconds--;
+                const mins = Math.floor(timerSeconds / 60);
+                const secs = timerSeconds % 60;
+                timerElement.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+            }, 1000);
+        }
+
+        function renderNavGrid() {
+            questionNavGrid.innerHTML = '';
+            questionsData.forEach((q, idx) => {
+                const btn = document.createElement('button');
+                btn.className = `w-8 h-8 rounded-lg text-xs font-bold transition flex items-center justify-center ${getNavBtnStyle(idx)}`;
+                btn.innerText = idx + 1;
+                btn.addEventListener('click', () => {
+                    loadQuestion(idx);
+                });
+                questionNavGrid.appendChild(btn);
+            });
+        }
+
+        function getNavBtnStyle(index) {
+            const isAnswered = studentAnswers.hasOwnProperty(questionsData[index].id) && 
+                               studentAnswers[questionsData[index].id] !== "";
+            const isCurrent = index === currentQuestionIndex;
+
+            if (isCurrent) {
+                return "bg-brand-500 text-white shadow-md ring-2 ring-brand-300 dark:ring-brand-700 scale-110";
+            }
+            if (isAnswered) {
+                return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800";
+            }
+            return "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600";
+        }
+
+        function loadQuestion(index) {
+            currentQuestionIndex = index;
+            const q = questionsData[index];
+
+            const progressPercent = ((index + 1) / questionsData.length) * 100;
+            progressBar.style.width = `${progressPercent}%`;
+
+            questionCounter.innerText = `السؤال ${index + 1} من ${questionsData.length}`;
+            questionPointsBadge.innerText = `الدرجة: ${q.points}`;
+
+            if (q.type === 'mcq') {
+                questionTypeBadge.innerHTML = `<i class="fa-regular fa-circle-dot"></i> اختيار من متعدد`;
+                questionTypeBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300";
+            } else {
+                questionTypeBadge.innerHTML = `<i class="fa-solid fa-pen-nib"></i> سؤال مقالي`;
+                questionTypeBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300";
+            }
+
+            questionText.innerText = `${q.id}. ${q.question}`;
+            optionsContainer.innerHTML = '';
+            const existingAnswer = studentAnswers[q.id] || "";
+
+            if (q.type === 'mcq') {
+                q.options.forEach((opt) => {
+                    const optionBtn = document.createElement('div');
+                    const isSelected = existingAnswer === opt;
+                    
+                    optionBtn.className = `p-4 rounded-2xl border-2 cursor-pointer transition flex items-center justify-between ${
+                        isSelected 
+                        ? 'border-brand-500 bg-brand-50/70 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 font-bold shadow-sm' 
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800'
+                    }`;
+
+                    optionBtn.innerHTML = `
+                        <span class="text-sm sm:text-base leading-relaxed">${opt}</span>
+                        <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                            isSelected ? 'border-brand-500 bg-brand-500 text-white' : 'border-gray-300 dark:border-gray-600'
+                        }">
+                            ${isSelected ? '<i class="fa-solid fa-check text-xs"></i>' : ''}
+                        </div>
+                    `;
+
+                    optionBtn.addEventListener('click', () => {
+                        studentAnswers[q.id] = opt;
+                        loadQuestion(currentQuestionIndex);
+                        renderNavGrid();
+                    });
+                    optionsContainer.appendChild(optionBtn);
+                });
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.rows = 5;
+                textarea.placeholder = "اكتب إجابتك المقالية بالتفصيل هنا...";
+                textarea.className = "w-full p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 focus:outline-none focus:border-brand-500 transition text-sm sm:text-base leading-relaxed";
+                textarea.value = existingAnswer;
+
+                textarea.addEventListener('input', (e) => {
+                    studentAnswers[q.id] = e.target.value;
+                    renderNavGrid();
+                });
+                optionsContainer.appendChild(textarea);
+            }
+
+            prevBtn.disabled = index === 0;
+            if (index === questionsData.length - 1) {
+                nextBtn.classList.add('hidden');
+                submitExamBtn.classList.remove('hidden');
+                submitExamBtn.classList.add('flex');
+            } else {
+                nextBtn.classList.remove('hidden');
+                submitExamBtn.classList.add('hidden');
+                submitExamBtn.classList.remove('flex');
+            }
+
+            renderNavGrid();
+        }
+
+        nextBtn.addEventListener('click', () => {
+            if (currentQuestionIndex < questionsData.length - 1) {
+                triggerEmojiAnimation();
+                loadQuestion(currentQuestionIndex + 1);
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (currentQuestionIndex > 0) {
+                triggerEmojiAnimation();
+                loadQuestion(currentQuestionIndex - 1);
+            }
+        });
+
+        function triggerEmojiAnimation() {
+            const randomEmoji = funEmojis[Math.floor(Math.random() * funEmojis.length)];
+            emojiTransition.innerText = randomEmoji;
+            emojiTransition.classList.remove('hidden');
+            setTimeout(() => emojiTransition.classList.add('hidden'), 400);
+        }
+
+        submitExamBtn.addEventListener('click', () => {
+            const unanswered = questionsData.length - Object.keys(studentAnswers).filter(k => studentAnswers[k] !== "").length;
+            let confirmMsg = "هل أنت تأكيد من إنهاء الامتحان وإرسال إجاباتك للتصحيح؟";
+            if (unanswered > 0) {
+                confirmMsg = `تنبيه: يوجد لديك (${unanswered}) أسئلة لم تقم بالإجابة عليها بعد. هل تريد الإرسال؟`;
+            }
+            if (window.confirm(confirmMsg)) {
+                submitExamToCloud();
+            }
+        });
+
+        // Submit Exam to Cloud & Listen for Teacher Grading
+        function submitExamToCloud() {
+            clearInterval(timerInterval);
+
+            examScreen.classList.add('hidden');
+            studentStatusScreen.classList.remove('hidden');
+            timerContainer.classList.add('hidden');
+            progressBarContainer.classList.add('hidden');
+
+            document.getElementById('pendingStudentName').innerText = currentStudentName;
+
+            // Auto Grade MCQ initially
+            let mcqAutoScore = 0;
+            const itemScores = {};
+
+            questionsData.forEach(q => {
+                const ans = studentAnswers[q.id] || "";
+                if (q.type === 'mcq') {
+                    if (ans === q.modelAnswer) {
+                        mcqAutoScore += q.points;
+                        itemScores[q.id] = q.points;
+                    } else {
+                        itemScores[q.id] = 0;
+                    }
+                } else {
+                    itemScores[q.id] = 0; // Essay set to zero pending teacher grade
+                }
+            });
+
+            const docData = {
+                studentId: currentStudentId,
+                studentName: currentStudentName,
+                answers: studentAnswers,
+                itemScores: itemScores,
+                status: "pending", // pending / graded
+                totalScore: mcqAutoScore,
+                submittedAt: new Date().toLocaleTimeString('ar-EG'),
+                teacherNotes: ""
+            };
+
+            const docRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('submissions').doc(currentStudentId);
+
+            docRef.set(docData).then(() => {
+                // Listen in real-time for teacher grading changes
+                docRef.onSnapshot(docSnap => {
+                    if (docSnap.exists) {
+                        const data = docSnap.data();
+                        renderStudentStatusScreen(data);
+                    }
+                });
+            }).catch(err => {
+                console.error("Cloud submit error:", err);
+            });
+        }
+
+        // Render Student Screen (Pending vs Graded)
+        function renderStudentStatusScreen(data) {
+            const pendingCard = document.getElementById('pendingCard');
+            const gradedCard = document.getElementById('gradedCard');
+            const statusTag = document.getElementById('statusTag');
+
+            if (data.status === "graded") {
+                pendingCard.classList.add('hidden');
+                gradedCard.classList.remove('hidden');
+                statusTag.className = "text-xs px-3 py-1 rounded-full font-bold bg-emerald-100 text-emerald-700";
+                statusTag.innerText = "تم التصحيح ✅";
+
+                document.getElementById('gradedStudentName').innerText = data.studentName;
+                document.getElementById('finalScoreDisplay').innerText = `${data.totalScore} / ${TOTAL_EXAM_POINTS}`;
+                
+                const percentage = Math.round((data.totalScore / TOTAL_EXAM_POINTS) * 100);
+                document.getElementById('percentageDisplay').innerText = `النسبة المئوية: ${percentage}%`;
+                
+                if (data.teacherNotes) {
+                    document.getElementById('teacherGlobalFeedback').innerText = `💬 ملاحظات المعلم: "${data.teacherNotes}"`;
+                }
+            } else {
+                pendingCard.classList.remove('hidden');
+                gradedCard.classList.add('hidden');
+                statusTag.className = "text-xs px-3 py-1 rounded-full font-bold bg-amber-100 text-amber-700";
+                statusTag.innerText = "يتم تصحيح المقالي ⏳";
+            }
+
+            // Render Answers Review
+            const listContainer = document.getElementById('studentReviewList');
+            listContainer.innerHTML = '';
+
+            questionsData.forEach((q, idx) => {
+                const userAns = (data.answers && data.answers[q.id]) ? data.answers[q.id] : "⚠️ بدون إجابة";
+                const score = (data.itemScores && data.itemScores[q.id] !== undefined) ? data.itemScores[q.id] : 0;
+
+                const item = document.createElement('div');
+                item.className = "p-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-right";
+                
+                item.innerHTML = `
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-gray-500 dark:text-gray-400">سؤال ${idx + 1} (رقم ${q.id})</span>
+                        <span class="text-xs font-bold ${data.status === 'graded' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}">
+                            ${data.status === 'graded' ? `الدرجة: ${score} / ${q.points}` : (q.type === 'mcq' ? `تلقائي: ${score}/${q.points}` : 'قيد المراجعة ⏳')}
+                        </span>
+                    </div>
+                    <p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">${q.question}</p>
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                        <strong class="text-brand-500 block mb-1">إجابتك:</strong>
+                        ${userAns.replace(/\n/g, '<br>')}
+                    </div>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+
+        // ==================== TEACHER DASHBOARD LOGIC ====================
+
+        function listenToSubmissions() {
+            const submissionsRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('submissions');
+
+            submissionsRef.onSnapshot(snapshot => {
+                allStudentsSubmissions = {};
+                const select = document.getElementById('studentsSelect');
+                select.innerHTML = '<option value="">-- اختر من قائمة الطلاب المنتظرين أو المصححين --</option>';
+
+                let count = 0;
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    allStudentsSubmissions[docSnap.id] = data;
+                    count++;
+
+                    const opt = document.createElement('option');
+                    opt.value = docSnap.id;
+                    const statusIcon = data.status === 'graded' ? '✅' : '⏳';
+                    opt.innerText = `${statusIcon} ${data.studentName} - (تقديم: ${data.submittedAt || 'الآن'})`;
+                    select.appendChild(opt);
+                });
+
+                document.getElementById('studentsTotalBadge').innerText = count;
+                if (activeTeacherSelectedDocId && allStudentsSubmissions[activeTeacherSelectedDocId]) {
+                    select.value = activeTeacherSelectedDocId;
+                }
+            });
+        }
+
+        document.getElementById('studentsSelect').addEventListener('change', (e) => {
+            const docId = e.target.value;
+            activeTeacherSelectedDocId = docId;
+
+            if (!docId || !allStudentsSubmissions[docId]) {
+                document.getElementById('correctionArea').classList.add('hidden');
+                document.getElementById('noStudentSelectedMsg').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('correctionArea').classList.remove('hidden');
+            document.getElementById('noStudentSelectedMsg').classList.add('hidden');
+            renderTeacherGradingForm(allStudentsSubmissions[docId]);
+        });
+
+        function renderTeacherGradingForm(studentData) {
+            document.getElementById('currentCorrectingStudent').innerText = `طالب: ${studentData.studentName}`;
+            document.getElementById('currentCorrectingTime').innerText = `وقت التقديم: ${studentData.submittedAt || '--'}`;
+
+            const container = document.getElementById('gradingQuestionsContainer');
+            container.innerHTML = '';
+
+            const localScores = Object.assign({}, studentData.itemScores || {});
+
+            function updateLiveScoreDisplay() {
+                let currentSum = 0;
+                Object.values(localScores).forEach(val => currentSum += Number(val || 0));
+                document.getElementById('liveCalculatedScore').innerText = `${currentSum} / ${TOTAL_EXAM_POINTS}`;
+            }
+            updateLiveScoreDisplay();
+
+            questionsData.forEach((q, idx) => {
+                const userAns = (studentData.answers && studentData.answers[q.id]) ? studentData.answers[q.id] : "⚠️ بدون إجابة";
+                const currentScore = localScores[q.id] !== undefined ? localScores[q.id] : 0;
+
+                const card = document.createElement('div');
+                card.className = "bg-white dark:bg-gray-800 rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 space-y-3";
+
+                let badgeHtml = q.type === 'mcq' 
+                    ? `<span class="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-xs font-bold px-2.5 py-1 rounded-full">اختيار من متعدد</span>`
+                    : `<span class="bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 text-xs font-bold px-2.5 py-1 rounded-full">سؤال مقالي</span>`;
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 pb-2">
+                        <div class="flex items-center gap-2">
+                            ${badgeHtml}
+                            <span class="text-xs font-bold text-gray-500 dark:text-gray-400">سؤال ${idx + 1} (من ${q.points} درجات)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs font-bold text-gray-700 dark:text-gray-300">الدرجة:</label>
+                            <input type="number" min="0" max="${q.points}" step="0.5" value="${currentScore}" data-qid="${q.id}" class="score-input w-20 p-1.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-center font-bold text-sm text-brand-600 dark:text-brand-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                        </div>
+                    </div>
+                    <p class="text-sm font-bold text-gray-800 dark:text-gray-200">${q.question}</p>
+                    
+                    ${q.type === 'mcq' ? `<p class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">الإجابة النموذجية: ${q.modelAnswer}</p>` : ''}
+                    
+                    <div class="bg-gray-50 dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-700 text-xs sm:text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
+                        <span class="text-gray-400 font-bold block mb-1">إجابة الطالب:</span>
+                        ${userAns.replace(/\n/g, '<br>')}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+
+            // Global Note Card
+            const globalNoteCard = document.createElement('div');
+            globalNoteCard.className = "bg-purple-50 dark:bg-purple-950/30 rounded-3xl p-5 border border-purple-200 dark:border-purple-800";
+            globalNoteCard.innerHTML = `
+                <label class="block text-xs font-bold text-purple-900 dark:text-purple-300 mb-2">ملاحظات عامة للطالب (تظهر في شاشته):</label>
+                <textarea id="teacherNotesInput" rows="2" placeholder="اكتب تعليقك أو إشادتك للطالب هنا..." class="w-full p-3 rounded-2xl border border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-100 focus:outline-none">${studentData.teacherNotes || ''}</textarea>
+            `;
+            container.appendChild(globalNoteCard);
+
+            // Bind Score Inputs Change
+            const inputs = container.querySelectorAll('.score-input');
+            inputs.forEach(inp => {
+                inp.addEventListener('input', (e) => {
+                    const qid = e.target.getAttribute('data-qid');
+                    localScores[qid] = parseFloat(e.target.value) || 0;
+                    updateLiveScoreDisplay();
+                });
+            });
+
+            // Save Grading Event
+            document.getElementById('saveGradingBtn').onclick = () => {
+                let finalTotal = 0;
+                Object.values(localScores).forEach(val => finalTotal += Number(val || 0));
+                
+                const notes = document.getElementById('teacherNotesInput').value.trim();
+
+                const updatePayload = {
+                    itemScores: localScores,
+                    totalScore: finalTotal,
+                    status: "graded",
+                    teacherNotes: notes
+                };
+
+                db.collection('artifacts').doc(appId).collection('public').doc('data').collection('submissions').doc(studentData.studentId)
+                    .update(updatePayload)
+                    .then(() => {
+                        alert(`تم حفظ وتحديث نتيجة الطالب (${studentData.studentName}) بنجاح!`);
+                    })
+                    .catch(err => {
+                        console.error("Save score error:", err);
+                    });
+            };
+        }
+    </script>
+</body>
+</html>
